@@ -1,4 +1,4 @@
-// package hdwsaas implements `A Secure Hierarchical Deterministic Wallet Supporting Stealth Address with Aggregate Signature`
+// package hdwsaas implements `A Secure Hierarchical Deterministic Wallet Supporting Stealth Address and Aggregate Signature`
 package hdwsaas
 
 import (
