@@ -11,8 +11,6 @@ type PublicParams struct {
 	pairing *pbc.Pairing
 	P       *pbc.Element // generator for G1
 	PBytes  []byte       // generator for G1 in bytes form
-
-	w *pbc.Element // w
 }
 
 type WalletSecretKey struct {
@@ -32,14 +30,12 @@ type DVK struct {
 }
 
 type signature struct {
-	w      *pbc.Element // Zp
 	XPrime *pbc.Element // G2
 	SPrime *pbc.Element // G1
 	TPrime *pbc.Element // G1
 }
 
 type aggregatesignature struct {
-	w  *pbc.Element   // Zp
 	Xn []*pbc.Element // G2
 	Sn *pbc.Element   // G1
 	Tn *pbc.Element   // G1
