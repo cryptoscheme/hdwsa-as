@@ -1,4 +1,4 @@
-package hdwsaas
+package hdwsa2
 
 import (
 	"github.com/Nik-U/pbc"
