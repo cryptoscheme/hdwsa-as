@@ -1,4 +1,4 @@
-package hdwsaas
+package hdwsa2
 
 import (
 	"crypto/rand"
