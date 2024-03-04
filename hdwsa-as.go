@@ -1,4 +1,4 @@
-// package hdwsaas implements `A Secure Hierarchical Deterministic Wallet Supporting Stealth Address and Aggregate Signature`
+// package hdwsa2 implements `HDWSA2: A Secure Hierarchical Deterministic Wallet Supporting Stealth Address and Signature Aggregation`
 package hdwsaas
 
 import (
@@ -35,7 +35,6 @@ REPEAT:
 		qbits:   qbits,
 		pairing: pairing,
 		P:       P,
-		w:       pairing.NewZr().Rand(), // fix a number w
 		PBytes:  P.Bytes(),
 	}
 }
@@ -167,7 +166,7 @@ func (pp *PublicParams) SignKeyDerive(dvk *DVK, idt []string, wpk WalletPublicKe
 	return &DSK{pp.pairing.NewG1().PowZn(h3, wsk.alpha)}
 }
 
-func (pp *PublicParams) Sign(m []byte, dvk *DVK, dsk *DSK) *signature {
+func (pp *PublicParams) SSign(w string, m []byte, dvk *DVK, dsk *DSK) *signature {
 	// pick random x
 REPEAT0:
 	x := pp.pairing.NewZr().Rand() // pick a random number x
@@ -205,7 +204,7 @@ REPEAT0:
 		}
 		// compute h = H6(dvk, m, w)
 	REPEAT2:
-		h := pp.pairing.NewZr().SetFromStringHash(DSTForH6+dvk.Qr.String()+dvk.Qvk.String()+string(m)+XPrime.String() + pp.w.String(), sha256Func)
+		h := pp.pairing.NewZr().SetFromStringHash(DSTForH6+dvk.Qr.String()+dvk.Qvk.String()+string(m)+XPrime.String()+w, sha256Func)
 		if h.Is0() {
 			goto REPEAT2
 		}
@@ -218,16 +217,16 @@ REPEAT0:
 
 REPEAT3:
 	sha256Func := sha256.New()
-	Pw := pp.pairing.NewG1().SetFromStringHash(DSTForH5+pp.w.String(), sha256Func)
+	Pw := pp.pairing.NewG1().SetFromStringHash(DSTForH5+w, sha256Func)
 	if Pw.Is0() {
 		goto REPEAT3
 	}
 	ndItem := pp.pairing.NewG1().PowZn(Pw, r) // compute rPw
 	SPrime := (<-rstItemC).ThenAdd(ndItem).ThenAdd(xP)
-	return &signature{w: pp.w, XPrime: XPrime, SPrime: SPrime, TPrime: <-rPCh}
+	return &signature{XPrime: XPrime, SPrime: SPrime, TPrime: <-rPCh}
 }
 
-func (pp *PublicParams) Verify(m []byte, sigma *signature, dvk *DVK) bool {
+func (pp *PublicParams) SVerify(w string, m []byte, sigma *signature, dvk *DVK) bool {
 	if sigma != nil || dvk != nil {
 		// compute e(S', P)
 		lshCh := make(chan *pbc.Element, 1)
@@ -239,7 +238,7 @@ func (pp *PublicParams) Verify(m []byte, sigma *signature, dvk *DVK) bool {
 		go func() {
 			sha256Func := sha256.New()
 			c := pp.pairing.NewZr().SetFromStringHash(DSTForH4+dvk.Qr.String()+dvk.Qvk.String()+string(m)+sigma.XPrime.String(), sha256Func)
-			h := pp.pairing.NewZr().SetFromStringHash(DSTForH6+dvk.Qr.String()+dvk.Qvk.String()+string(m)+sigma.XPrime.String() + pp.w.String(), sha256Func)
+			h := pp.pairing.NewZr().SetFromStringHash(DSTForH6+dvk.Qr.String()+dvk.Qvk.String()+string(m)+sigma.XPrime.String()+w, sha256Func)
 			ch := pp.pairing.NewZr().MulZn(c, h)
 			tempCh <- pp.pairing.NewGT().PowZn(dvk.Qvk, pp.pairing.NewZr().Neg(ch))
 			close(tempCh)
@@ -247,7 +246,7 @@ func (pp *PublicParams) Verify(m []byte, sigma *signature, dvk *DVK) bool {
 
 		Pw := pp.pairing.NewG1().Set0()
 		sha256Func := sha256.New()
-		Pw = Pw.SetFromStringHash(DSTForH5+pp.w.String(), sha256Func)
+		Pw = Pw.SetFromStringHash(DSTForH5+w, sha256Func)
 		pair := pp.pairing.NewGT().Pair(sigma.TPrime, Pw)
 		gt := pp.pairing.NewGT().Set1()
 		rsh := gt.Mul(<-tempCh, pair)
@@ -261,12 +260,11 @@ func (pp *PublicParams) Verify(m []byte, sigma *signature, dvk *DVK) bool {
 }
 
 // Assume all signature have the same w.
-func (pp *PublicParams) Aggregation(sigma ...*signature) aggregatesignature {
+func (pp *PublicParams) Aggregation(w string, sigma ...*signature) aggregatesignature {
 	Xn := make([]*pbc.Element, len(sigma))
 	Sn := pp.pairing.NewG1().Set0()
 	Tn := pp.pairing.NewG1().Set0()
-	w := pp.pairing.NewZr().Set0()
-	w = pp.w
+
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 	go func(_sigma ...*signature) {
@@ -294,12 +292,12 @@ func (pp *PublicParams) Aggregation(sigma ...*signature) aggregatesignature {
 		}
 	}(sigma...)
 	wg.Wait()
-	return aggregatesignature{w, Xn, Sn, Tn}
+	return aggregatesignature{Xn, Sn, Tn}
 }
 
-func (pp *PublicParams) AggVerify(ms [][]byte, as aggregatesignature, dvks []DVK) bool {
+func (pp *PublicParams) AggVerify(w string, ms [][]byte, as aggregatesignature, dvks []DVK) bool {
 	sha256Func := sha256.New()
-	Pw := pp.pairing.NewG1().SetFromStringHash(DSTForH5+pp.w.String(), sha256Func)
+	Pw := pp.pairing.NewG1().SetFromStringHash(DSTForH5+w, sha256Func)
 	// compute e(Sn, P)
 	lshC := make(chan *pbc.Element, 1)
 	go func() {
@@ -341,7 +339,7 @@ func (pp *PublicParams) AggVerify(ms [][]byte, as aggregatesignature, dvks []DVK
 		sha256Func := sha256.New()
 		h_i := make([]*pbc.Element, len(ms))
 		for i := 0; i < len(ms); i++ {
-			h_i[i] = pp.pairing.NewZr().SetFromStringHash(DSTForH6+dvks[i].Qr.String()+dvks[i].Qvk.String()+string(ms[i])+ as.Xn[i].String() + pp.w.String(), sha256Func)
+			h_i[i] = pp.pairing.NewZr().SetFromStringHash(DSTForH6+dvks[i].Qr.String()+dvks[i].Qvk.String()+string(ms[i])+as.Xn[i].String()+w, sha256Func)
 		}
 		h_i_C <- h_i
 		close(h_i_C)
