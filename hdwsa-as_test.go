@@ -17,6 +17,8 @@ var (
 
 const (
 	messageSize = 256 // bytes
+
+	w = "1000"
 )
 
 var errmsg = errors.New("bad signature")
@@ -52,14 +54,14 @@ func TestScheme(t *testing.T) {
 		}
 		signatures := make([]*signature, len(msgs))
 		for i := range msgs {
-			signatures[i] = pp.Sign(msgs[i], &dvks[i], &dsks[i])
-			if !pp.Verify(msgs[i], signatures[i], &dvks[i]) {
+			signatures[i] = pp.SSign(w, msgs[i], &dvks[i], &dsks[i])
+			if !pp.SVerify(w, msgs[i], signatures[i], &dvks[i]) {
 				panic(errmsg)
 			}
 		}
 
-		as := pp.Aggregation(signatures...)
-		if !pp.AggVerify(msgs, as, dvks) {
+		as := pp.Aggregation(w, signatures...)
+		if !pp.AggVerify(w, msgs, as, dvks) {
 			panic("AggVerify failed")
 		}
 	}
@@ -81,7 +83,7 @@ func level0Sign(b *testing.B, pp *PublicParams) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pp.Sign(nil, dvk, dsk)
+		pp.SSign(w, nil, dvk, dsk)
 	}
 }
 
@@ -94,11 +96,11 @@ func level0Verify(b *testing.B, pp *PublicParams) {
 	}
 
 	dsk := pp.SignKeyDerive(dvk, rootID, wpk0, wsk0)
-	sig := pp.Sign(nil, dvk, dsk)
+	sig := pp.SSign(w, nil, dvk, dsk)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pp.Verify(nil, sig, dvk)
+		pp.SVerify(w, nil, sig, dvk)
 	}
 }
 
@@ -115,13 +117,13 @@ func benchmarkLevel1SignThenVerify(b *testing.B, pp *PublicParams) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pp.Sign(msgs, dvk, dsk)
+		pp.SSign(w, msgs, dvk, dsk)
 	}
 	b.ResetTimer()
-	sig := pp.Sign(msgs, dvk, dsk)
+	sig := pp.SSign(w, msgs, dvk, dsk)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pp.Verify(msgs, sig, dvk)
+		pp.SVerify(w, msgs, sig, dvk)
 	}
 }
 
@@ -138,7 +140,7 @@ func level1Sign(b *testing.B, pp *PublicParams) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pp.Sign(msgs, dvk, dsk)
+		pp.SSign(w, msgs, dvk, dsk)
 	}
 }
 
@@ -152,14 +154,13 @@ func level1Verify(b *testing.B, pp *PublicParams) {
 	dsk := pp.SignKeyDerive(dvk, level1, wpk1, wsk1)
 	msgs := make([]byte, messageSize)
 	rand.Reader.Read(msgs)
-	sig := pp.Sign(msgs, dvk, dsk)
+	sig := pp.SSign(w, msgs, dvk, dsk)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pp.Verify(msgs, sig, dvk)
+		pp.SVerify(w, msgs, sig, dvk)
 	}
 }
-
 
 func BenchmarkLevel1Aggregation(b *testing.B) {
 	batch := 2
@@ -177,7 +178,7 @@ func BenchmarkLevel1Aggregation(b *testing.B) {
 		dsks[i] = *(pp.SignKeyDerive(&dvks[i], level1, wpk1, wsk1))
 		msgs := make([]byte, messageSize)
 		rand.Reader.Read(msgs)
-		signatures[i] = pp.Sign(msgs, &dvks[i], &dsks[i])
+		signatures[i] = pp.SSign(w, msgs, &dvks[i], &dsks[i])
 	}
 	level1Aggregation(b, signatures...)
 }
@@ -186,7 +187,7 @@ func level1Aggregation(b *testing.B, sigma ...*signature) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pp.Aggregation(sigma...)
+		pp.Aggregation(w, sigma...)
 	}
 }
 
@@ -207,9 +208,9 @@ func BenchmarkLevel1AggVerify(b *testing.B) {
 		dsks[i] = *(pp.SignKeyDerive(&dvks[i], level1, wpk1, wsk1))
 		msgs[i] = make([]byte, messageSize)
 		rand.Reader.Read(msgs[i])
-		signatures[i] = pp.Sign(msgs[i], &dvks[i], &dsks[i])
+		signatures[i] = pp.SSign(w, msgs[i], &dvks[i], &dsks[i])
 	}
-	sa := pp.Aggregation(signatures...)
+	sa := pp.Aggregation(w, signatures...)
 	benchmarkLevel1AggVerify(b, msgs, sa, dvks)
 }
 
@@ -217,6 +218,6 @@ func benchmarkLevel1AggVerify(b *testing.B, msgs [][]byte, sa aggregatesignature
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pp.AggVerify(msgs, sa, dvks) 
+		pp.AggVerify(w, msgs, sa, dvks)
 	}
 }
