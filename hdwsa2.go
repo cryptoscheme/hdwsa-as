@@ -1,5 +1,5 @@
 // package hdwsa2 implements `HDWSA2: A Secure Hierarchical Deterministic Wallet Supporting Stealth Address and Signature Aggregation`
-package hdwsaas
+package hdwsa2
 
 import (
 	"crypto/sha256"
