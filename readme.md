@@ -1,5 +1,5 @@
-# HDWSA-AS
-The Experimental Implementation of A Secure Hierarchical Deterministic Wallet Supporting Stealth Address and Aggregate Signature.
+# HDWSA2
+The Experimental Implementation of HDWSA2: A Secure Hierarchical Deterministic Wallet Supporting Stealth Address and Signature Aggregation.
 
 # Prerequisites
 
@@ -10,9 +10,9 @@ The Experimental Implementation of A Secure Hierarchical Deterministic Wallet Su
 # Test
 To download, run stathdwsa.sh in hdwsa, follow the following steps:
   
-  git clone https://github.com/cryptoscheme/hdwsa
+  git clone https://github.com/cryptoscheme/hdwsa2
   
-  cd hdwsa-as
+  cd hdwsa2
   
   ./run.sh
 
@@ -25,7 +25,7 @@ To download, run stathdwsa.sh in hdwsa, follow the following steps:
    
 # Introduction of Source Files
 
-   hdwsa-as.go: the implementation of all used functions in our hdwsa-as scheme.
+   hdwsa-as.go: the implementation of all used functions in our hdwsa2 scheme.
    
    types.go: the data models.
    
