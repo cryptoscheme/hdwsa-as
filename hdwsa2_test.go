@@ -72,38 +72,6 @@ var pp *PublicParams = Setup(rbits, qbits)
 func BenchmarkSchemeL1SSign(b *testing.B)   { level1SSign(b, pp) }
 func BenchmarkSchemeL1SVerify(b *testing.B) { level1SVerify(b, pp) }
 
-func level0Sign(b *testing.B, pp *PublicParams) {
-	wsk0, wpk0 := pp.RootWalletKeyGen(rootID)
-	dvk := pp.VerifyKeyDerive(rootID, &wpk0)
-	if !pp.VerifyKeyCheck(dvk, rootID, wpk0, wsk0) {
-		panic("error")
-	}
-	dsk := pp.SignKeyDerive(dvk, rootID, wpk0, wsk0)
-
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		pp.SSign(w, nil, dvk, dsk)
-	}
-}
-
-func level0Verify(b *testing.B, pp *PublicParams) {
-	wsk0, wpk0 := pp.RootWalletKeyGen(rootID)
-
-	dvk := pp.VerifyKeyDerive(rootID, &wpk0)
-	if !pp.VerifyKeyCheck(dvk, rootID, wpk0, wsk0) {
-		panic("error")
-	}
-
-	dsk := pp.SignKeyDerive(dvk, rootID, wpk0, wsk0)
-	sig := pp.SSign(w, nil, dvk, dsk)
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		pp.SVerify(w, nil, sig, dvk)
-	}
-}
-
 func benchmarkLevel1SignThenVerify(b *testing.B, pp *PublicParams) {
 	wsk0, wpk0 := pp.RootWalletKeyGen(rootID)
 	wpk1, wsk1 := pp.WalletKeyDelegate(level1, wpk0, wsk0)
