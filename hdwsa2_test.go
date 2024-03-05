@@ -131,7 +131,7 @@ func level1SVerify(b *testing.B, pp *PublicParams) {
 }
 
 func BenchmarkLevel1Aggregation(b *testing.B) {
-	batch := 2
+	batch := 2000
 	wsk0, wpk0 := pp.RootWalletKeyGen(rootID)
 	wpk1, wsk1 := pp.WalletKeyDelegate(level1, wpk0, wsk0)
 	dvks := make([]DVK, batch)
@@ -160,7 +160,7 @@ func level1Aggregation(b *testing.B, sigma ...*signature) {
 }
 
 func BenchmarkLevel1AggVerify(b *testing.B) {
-	batch := 2
+	batch := 2000
 	wsk0, wpk0 := pp.RootWalletKeyGen(rootID)
 	wpk1, wsk1 := pp.WalletKeyDelegate(level1, wpk0, wsk0)
 	dvks := make([]DVK, batch)
