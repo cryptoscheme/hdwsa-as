@@ -11,8 +11,8 @@ if [ ! -d "$directory" ]; then
 fi
 
 # level 1
-benchmarkFuncName[0]=BenchmarkSchemeL1Sign
-benchmarkFuncName[1]=BenchmarkSchemeL1Verify
+benchmarkFuncName[0]=BenchmarkSchemeL1SSign
+benchmarkFuncName[1]=BenchmarkSchemeL1SVerify
 benchmarkFuncName[2]=BenchmarkLevel1Aggregation
 benchmarkFuncName[3]=BenchmarkLevel1AggVerify
 
