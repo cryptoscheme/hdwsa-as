@@ -69,8 +69,8 @@ func TestScheme(t *testing.T) {
 
 var pp *PublicParams = Setup(rbits, qbits)
 
-func BenchmarkSchemeL1Sign(b *testing.B)   { level1Sign(b, pp) }
-func BenchmarkSchemeL1Verify(b *testing.B) { level1Verify(b, pp) }
+func BenchmarkSchemeL1SSign(b *testing.B)   { level1SSign(b, pp) }
+func BenchmarkSchemeL1SVerify(b *testing.B) { level1SVerify(b, pp) }
 
 func level0Sign(b *testing.B, pp *PublicParams) {
 	wsk0, wpk0 := pp.RootWalletKeyGen(rootID)
@@ -127,7 +127,7 @@ func benchmarkLevel1SignThenVerify(b *testing.B, pp *PublicParams) {
 	}
 }
 
-func level1Sign(b *testing.B, pp *PublicParams) {
+func level1SSign(b *testing.B, pp *PublicParams) {
 	wsk0, wpk0 := pp.RootWalletKeyGen(rootID)
 	wpk1, wsk1 := pp.WalletKeyDelegate(level1, wpk0, wsk0)
 	dvk := pp.VerifyKeyDerive(level1, &wpk1)
@@ -144,7 +144,7 @@ func level1Sign(b *testing.B, pp *PublicParams) {
 	}
 }
 
-func level1Verify(b *testing.B, pp *PublicParams) {
+func level1SVerify(b *testing.B, pp *PublicParams) {
 	wsk0, wpk0 := pp.RootWalletKeyGen(rootID)
 	wpk1, wsk1 := pp.WalletKeyDelegate(level1, wpk0, wsk0)
 	dvk := pp.VerifyKeyDerive(level1, &wpk1)
