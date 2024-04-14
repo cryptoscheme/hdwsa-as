@@ -25,22 +25,22 @@ type WalletPublicKey struct {
 }
 
 type DVK struct {
-	Qr  *pbc.Element // Qr =  rP  G1
-	Qvk *pbc.Element // G2
+	Qr       *pbc.Element // Qr =  rP  G1
+	Qvk_zero *pbc.Element // G2
+	Qvk_one  *pbc.Element // G2
 }
 
 type signature struct {
 	XPrime *pbc.Element // G2
 	SPrime *pbc.Element // G1
-	TPrime *pbc.Element // G1
 }
 
 type aggregatesignature struct {
-	Xn []*pbc.Element // G2
-	Sn *pbc.Element   // G1
-	Tn *pbc.Element   // G1
+	X  []*pbc.Element
+	Sn *pbc.Element // G1
 }
 
 type DSK struct {
-	dsk *pbc.Element // G1
+	dsk_zero *pbc.Element // G1
+	dsk_one  *pbc.Element // G1
 }
