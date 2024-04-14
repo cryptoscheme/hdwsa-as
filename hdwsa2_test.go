@@ -69,8 +69,11 @@ func TestScheme(t *testing.T) {
 
 var pp *PublicParams = Setup(rbits, qbits)
 
-func BenchmarkSchemeL1SSign(b *testing.B)   { level1SSign(b, pp) }
-func BenchmarkSchemeL1SVerify(b *testing.B) { level1SVerify(b, pp) }
+func BenchmarkSchemeL1VerifyKeyDerive(b *testing.B) { level1VerifyKeyDerive(b, pp) }
+func BenchmarkSchemeL1VerifyKeyCheck(b *testing.B)   { level1VerifyKeyCheck(b, pp) }
+func BenchmarkSchemeL1SignKeyDerive(b *testing.B)    { level1SignKeyDerive(b, pp) }
+func BenchmarkSchemeL1SSign(b *testing.B)            { level1SSign(b, pp) }
+func BenchmarkSchemeL1SVerify(b *testing.B)          { level1SVerify(b, pp) }
 
 func benchmarkLevel1SignThenVerify(b *testing.B, pp *PublicParams) {
 	wsk0, wpk0 := pp.RootWalletKeyGen(rootID)
@@ -92,6 +95,42 @@ func benchmarkLevel1SignThenVerify(b *testing.B, pp *PublicParams) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		pp.SVerify(w, msgs, sig, dvk)
+	}
+}
+
+func level1VerifyKeyDerive(b *testing.B, pp *PublicParams) {
+	wsk0, wpk0 := pp.RootWalletKeyGen(rootID)
+	wpk1, _ := pp.WalletKeyDelegate(level1, wpk0, wsk0)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pp.VerifyKeyDerive(level1, &wpk1)
+	}
+}
+
+func level1VerifyKeyCheck(b *testing.B, pp *PublicParams) {
+	wsk0, wpk0 := pp.RootWalletKeyGen(rootID)
+	wpk1, wsk1 := pp.WalletKeyDelegate(level1, wpk0, wsk0)
+	dvk := pp.VerifyKeyDerive(level1, &wpk1)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pp.VerifyKeyCheck(dvk, level1, wpk1, wsk1)
+	}
+}
+
+func level1SignKeyDerive(b *testing.B, pp *PublicParams) {
+	wsk0, wpk0 := pp.RootWalletKeyGen(rootID)
+	wpk1, wsk1 := pp.WalletKeyDelegate(level1, wpk0, wsk0)
+	dvk := pp.VerifyKeyDerive(level1, &wpk1)
+
+	if !pp.VerifyKeyCheck(dvk, level1, wpk1, wsk1) {
+		panic("error")
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pp.SignKeyDerive(dvk, level1, wpk1, wsk1)
 	}
 }
 
