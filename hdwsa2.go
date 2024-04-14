@@ -20,6 +20,7 @@ const (
 	DSTForH4 = "hdwsa-sa.h4"
 	DSTForH5 = "hdwsa-sa.h5"
 	DSTForH6 = "hdwsa-sa.h6"
+	DSTForH7 = "hdwsa-sa.h7"
 )
 
 func Setup(rbits, qbits uint32) *PublicParams {
@@ -126,27 +127,62 @@ REPEAT0:
 	}()
 
 	qid := pp.pairing.NewG1().PowZn(wpk.BID, r) // rBID
-	var build strings.Builder
-	build.WriteString(DSTForH3)
-	build.WriteString(wpk.BID.String())
 	Qr := <-QrC
-	build.WriteString(Qr.String())
-	build.WriteString(qid.String())
-REPEAT1:
-	sha256Func := sha256.New()
-	h3 := pp.pairing.NewG1().SetFromStringHash(build.String(), sha256Func)
-	if h3.Is0() {
-		goto REPEAT1
+
+	Qvk_zero := make(chan *pbc.Element, 1)
+	go func() {
+		sha256Func := sha256.New()
+		var builder strings.Builder
+		builder.WriteString(DSTForH3)
+		builder.WriteString(wpk.BID.String())
+		builder.WriteString(Qr.String())
+		builder.WriteString(qid.String())
+		sha256Func.Reset()
+	REPEAT2:
+		h4 := pp.pairing.NewG1().SetFromStringHash(builder.String(), sha256Func)
+		if h4.Is0() {
+			goto REPEAT2
+		}
+		Qvk_zero <- pp.pairing.NewGT().Set1().Pair(h4, pp.pairing.NewG1().Neg(wpk.AID))
+		close(Qvk_zero)
+	}()
+
+	Qvk_one := make(chan *pbc.Element, 1)
+	go func() {
+		sha256Func := sha256.New()
+		var builder strings.Builder
+		builder.WriteString(DSTForH4)
+		builder.WriteString(wpk.BID.String())
+		builder.WriteString(Qr.String())
+		builder.WriteString(qid.String())
+		sha256Func.Reset()
+	REPEAT2:
+		h4 := pp.pairing.NewG1().SetFromStringHash(builder.String(), sha256Func)
+		if h4.Is0() {
+			goto REPEAT2
+		}
+		Qvk_one <- pp.pairing.NewGT().Set1().Pair(h4, pp.pairing.NewG1().Neg(wpk.AID))
+		close(Qvk_one)
+	}()
+
+	return &DVK{
+		Qr,
+		<-Qvk_zero,
+		<-Qvk_one,
 	}
-	return &DVK{Qr, pp.pairing.NewGT().Set1().Pair(h3, pp.pairing.NewG1().Neg(wpk.AID))}
 }
 
 func (pp *PublicParams) VerifyKeyCheck(dvk *DVK, ID []string, wpk WalletPublicKey, wsk WalletSecretKey) bool {
 	sha256Func := sha256.New()
 	h3 := pp.pairing.NewG1().SetFromStringHash(DSTForH3+wpk.BID.String()+dvk.Qr.String()+
 		pp.pairing.NewG1().PowZn(dvk.Qr, wsk.beta).String(), sha256Func)
-	pair := pp.pairing.NewGT().Pair(h3, pp.pairing.NewG1().Neg(wpk.AID))
-	return dvk.Qvk.Equals(pair)
+	pair_zero := pp.pairing.NewGT().Pair(h3, pp.pairing.NewG1().Neg(wpk.AID))
+
+	sha256Func.Reset()
+	h4 := pp.pairing.NewG1().SetFromStringHash(DSTForH4+wpk.BID.String()+dvk.Qr.String()+
+		pp.pairing.NewG1().PowZn(dvk.Qr, wsk.beta).String(), sha256Func)
+	pair_one := pp.pairing.NewGT().Pair(h4, pp.pairing.NewG1().Neg(wpk.AID))
+	return dvk.Qvk_zero.Equals(pair_zero) && dvk.Qvk_one.Equals(pair_one)
 }
 
 func (pp *PublicParams) SignKeyDerive(dvk *DVK, idt []string, wpk WalletPublicKey, wsk WalletSecretKey) *DSK {
@@ -163,7 +199,14 @@ func (pp *PublicParams) SignKeyDerive(dvk *DVK, idt []string, wpk WalletPublicKe
 	build.WriteString(Q1.String())
 	sha256Func := sha256.New()
 	h3 := pp.pairing.NewG1().SetFromStringHash(build.String(), sha256Func) // compute H3(*, *, *)
-	return &DSK{pp.pairing.NewG1().PowZn(h3, wsk.alpha)}
+
+	var builder strings.Builder
+	builder.WriteString(DSTForH4)
+	builder.WriteString(wpk.BID.String())
+	builder.WriteString(dvk.Qr.String())
+	builder.WriteString(Q1.String())
+	h4 := pp.pairing.NewG1().SetFromStringHash(builder.String(), sha256Func) // compute H4(*, *, *)
+	return &DSK{pp.pairing.NewG1().PowZn(h3, wsk.alpha), pp.pairing.NewG1().PowZn(h4, wsk.alpha)}
 }
 
 func (pp *PublicParams) SSign(w string, m []byte, dvk *DVK, dsk *DSK) *signature {
@@ -174,56 +217,36 @@ REPEAT0:
 		goto REPEAT0
 	}
 	xPCh := make(chan *pbc.Element, 1)
-	// compute xP
+	// compute X' = xP
 	go func() {
 		xPCh <- pp.pairing.NewG1().PowZn(pp.P, x)
 		close(xPCh)
 	}()
-	// compute T' = rP
-	r := pp.pairing.NewZr().Rand() // pick a random number r
-	if r.Is0() {
-		goto REPEAT0
-	}
-	rPCh := make(chan *pbc.Element, 1)
-	go func() {
-		rPCh <- pp.pairing.NewG1().PowZn(pp.P, r) // compute rP
-		close(rPCh)
-	}()
 
 	xP := <-xPCh
-	// compute X'
-	XPrime := pp.pairing.NewGT().Pair(xP, pp.P)
 
 	rstItemC := make(chan *pbc.Element, 1)
 	go func() {
 		sha256Func := sha256.New()
-	REPEAT1:
-		c := pp.pairing.NewZr().SetFromStringHash(DSTForH4+dvk.Qr.String()+dvk.Qvk.String()+string(m)+XPrime.String(), sha256Func)
-		if c.Is0() {
-			goto REPEAT1
-		}
-		// compute h = H6(dvk, m, w)
 	REPEAT2:
-		h := pp.pairing.NewZr().SetFromStringHash(DSTForH6+dvk.Qr.String()+dvk.Qvk.String()+string(m)+XPrime.String()+w, sha256Func)
+		c := pp.pairing.NewZr().SetFromStringHash(DSTForH6+dvk.Qr.String()+dvk.Qvk_zero.String()+dvk.Qvk_one.String()+string(m)+xP.String()+w, sha256Func)
+		h := pp.pairing.NewZr().SetFromStringHash(DSTForH7+dvk.Qr.String()+dvk.Qvk_zero.String()+dvk.Qvk_one.String()+string(m)+xP.String()+c.String()+w, sha256Func)
 		if h.Is0() {
 			goto REPEAT2
 		}
-		// compute c*h
-		ch := pp.pairing.NewZr().MulZn(c, h)
-		rstItem := pp.pairing.NewG1().PowZn(dsk.dsk, ch) // compute c*h*dsk
+		rstItem := pp.pairing.NewG1().PowZn(dsk.dsk_zero, h) // compute h*dsk_0
+
+		sha256Func.Reset()
+		rstItem.ThenAdd(pp.pairing.NewG1().PowZn(dsk.dsk_one, c)) // + c*dsk_1
+
+		Pw := pp.pairing.NewG1().SetFromStringHash(DSTForH5+w, sha256Func)
+
+		rstItem.ThenAdd(pp.pairing.NewG1().PowZn(Pw, x)) // + x * Pw
+
 		rstItemC <- rstItem
 		close(rstItemC)
 	}()
-
-REPEAT3:
-	sha256Func := sha256.New()
-	Pw := pp.pairing.NewG1().SetFromStringHash(DSTForH5+w, sha256Func)
-	if Pw.Is0() {
-		goto REPEAT3
-	}
-	ndItem := pp.pairing.NewG1().PowZn(Pw, r) // compute rPw
-	SPrime := (<-rstItemC).ThenAdd(ndItem).ThenAdd(xP)
-	return &signature{XPrime: XPrime, SPrime: SPrime, TPrime: <-rPCh}
+	return &signature{XPrime: xP, SPrime: <-rstItemC}
 }
 
 func (pp *PublicParams) SVerify(w string, m []byte, sigma *signature, dvk *DVK) bool {
@@ -234,36 +257,47 @@ func (pp *PublicParams) SVerify(w string, m []byte, sigma *signature, dvk *DVK) 
 			lshCh <- pp.pairing.NewGT().Pair(sigma.SPrime, pp.P)
 			close(lshCh)
 		}()
-		tempCh := make(chan *pbc.Element, 1)
+
+		Qvk_zero := make(chan *pbc.Element, 1)
+		cCh := make(chan *pbc.Element, 1)
 		go func() {
 			sha256Func := sha256.New()
-			c := pp.pairing.NewZr().SetFromStringHash(DSTForH4+dvk.Qr.String()+dvk.Qvk.String()+string(m)+sigma.XPrime.String(), sha256Func)
-			h := pp.pairing.NewZr().SetFromStringHash(DSTForH6+dvk.Qr.String()+dvk.Qvk.String()+string(m)+sigma.XPrime.String()+w, sha256Func)
-			ch := pp.pairing.NewZr().MulZn(c, h)
-			tempCh <- pp.pairing.NewGT().PowZn(dvk.Qvk, pp.pairing.NewZr().Neg(ch))
-			close(tempCh)
+			c := pp.pairing.NewZr().SetFromStringHash(DSTForH6+dvk.Qr.String()+dvk.Qvk_zero.String()+dvk.Qvk_one.String()+string(m)+sigma.XPrime.String()+w, sha256Func)
+			cCh <- c
+
+			sha256Func.Reset()
+			h := pp.pairing.NewZr().SetFromStringHash(DSTForH7+dvk.Qr.String()+dvk.Qvk_zero.String()+dvk.Qvk_one.String()+string(m)+sigma.XPrime.String()+c.String()+w, sha256Func)
+
+			Qvk_zero <- pp.pairing.NewGT().PowZn(dvk.Qvk_zero, pp.pairing.NewZr().Neg(h))
+			close(Qvk_zero)
+		}()
+
+		Qvk_one := make(chan *pbc.Element, 1)
+		go func() {
+			Qvk_one <- pp.pairing.NewGT().PowZn(dvk.Qvk_one, pp.pairing.NewZr().Neg(<-cCh))
+			close(Qvk_one)
 		}()
 
 		Pw := pp.pairing.NewG1().Set0()
 		sha256Func := sha256.New()
 		Pw = Pw.SetFromStringHash(DSTForH5+w, sha256Func)
-		pair := pp.pairing.NewGT().Pair(sigma.TPrime, Pw)
+		pair := pp.pairing.NewGT().Pair(sigma.XPrime, Pw) // e(X', Pw)
 		gt := pp.pairing.NewGT().Set1()
-		rsh := gt.Mul(<-tempCh, pair)
-		finalgt := pp.pairing.NewGT().Set1()
-		finalgt.Mul(rsh, sigma.XPrime)
+		rsh := gt.Mul(<-Qvk_zero, <-Qvk_one)
+
+		rsh.ThenMul(pair)
 
 		lsh := <-lshCh
-		return lsh.Equals(finalgt)
+
+		return lsh.Equals(rsh)
 	}
 	return false
 }
 
 // Assume all signature have the same w.
 func (pp *PublicParams) Aggregation(w string, sigma ...*signature) aggregatesignature {
-	Xn := make([]*pbc.Element, len(sigma))
+	X := make([]*pbc.Element, len(sigma))
 	Sn := pp.pairing.NewG1().Set0()
-	Tn := pp.pairing.NewG1().Set0()
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
@@ -273,9 +307,7 @@ func (pp *PublicParams) Aggregation(w string, sigma ...*signature) aggregatesign
 			if _sigma[i] == nil {
 				continue
 			}
-			Xn[i] = pp.pairing.NewG1().Set0()
-			Xn[i] = _sigma[i].XPrime
-			Sn.ThenAdd(_sigma[i].SPrime)
+			X[i] = _sigma[i].XPrime
 		}
 	}(sigma...)
 
@@ -285,17 +317,28 @@ func (pp *PublicParams) Aggregation(w string, sigma ...*signature) aggregatesign
 			if _sigma[i] == nil {
 				continue
 			}
-			if Tn == nil {
-				Tn = pp.pairing.NewG1().Set0()
-			}
-			Tn.ThenAdd(_sigma[i].TPrime)
+			Sn.ThenAdd(_sigma[i].SPrime)
 		}
 	}(sigma...)
 	wg.Wait()
-	return aggregatesignature{Xn, Sn, Tn}
+
+	return aggregatesignature{X, Sn}
 }
 
 func (pp *PublicParams) AggVerify(w string, ms [][]byte, as aggregatesignature, dvks []DVK) bool {
+	XnC := make(chan *pbc.Element, 1)
+	go func() {
+		Xn := pp.pairing.NewG1().Set0()
+		for i := range as.X {
+			if as.X[i] == nil {
+				continue
+			}
+			Xn.ThenAdd(as.X[i])
+		}
+		XnC <- Xn
+		close(XnC)
+	}()
+
 	sha256Func := sha256.New()
 	Pw := pp.pairing.NewG1().SetFromStringHash(DSTForH5+w, sha256Func)
 	// compute e(Sn, P)
@@ -305,62 +348,53 @@ func (pp *PublicParams) AggVerify(w string, ms [][]byte, as aggregatesignature, 
 		close(lshC)
 	}()
 
-	// compute e(Tn, Pw)
-	rshTermTwoC := make(chan *pbc.Element, 1)
-	go func() {
-		rshTermTwoC <- pp.pairing.NewGT().Set1().Pair(as.Tn, Pw)
-		close(rshTermTwoC)
-	}()
-
-	// compute π(Xi)
-	π_XiC := make(chan *pbc.Element, 1)
-	go func() {
-		π_Xi := pp.pairing.NewGT().Set1()
-		for i := range as.Xn {
-			π_Xi.ThenMul(as.Xn[i])
-		}
-		π_XiC <- π_Xi
-		close(π_XiC)
-	}()
-
 	c_i_C := make(chan []*pbc.Element, 1)
-	go func() {
-		sha256Func := sha256.New()
-		c_i := make([]*pbc.Element, len(ms))
-		for i := 0; i < len(ms); i++ {
-			c_i[i] = pp.pairing.NewZr().SetFromStringHash(DSTForH4+dvks[i].Qr.String()+dvks[i].Qvk.String()+string(ms[i])+as.Xn[i].String(), sha256Func)
-		}
-		c_i_C <- c_i
-		close(c_i_C)
-	}()
-
 	h_i_C := make(chan []*pbc.Element, 1)
 	go func() {
 		sha256Func := sha256.New()
+		c_i := make([]*pbc.Element, len(ms))
 		h_i := make([]*pbc.Element, len(ms))
 		for i := 0; i < len(ms); i++ {
-			h_i[i] = pp.pairing.NewZr().SetFromStringHash(DSTForH6+dvks[i].Qr.String()+dvks[i].Qvk.String()+string(ms[i])+as.Xn[i].String()+w, sha256Func)
+			c_i[i] = pp.pairing.NewZr().SetFromStringHash(
+				DSTForH6+dvks[i].Qr.String()+dvks[i].Qvk_zero.String()+dvks[i].Qvk_one.String()+string(ms[i])+as.X[i].String()+w,
+				sha256Func)
+			h_i[i] = pp.pairing.NewZr().SetFromStringHash(
+				DSTForH7+dvks[i].Qr.String()+dvks[i].Qvk_zero.String()+dvks[i].Qvk_one.String()+string(ms[i])+as.X[i].String()+c_i[i].String()+w,
+				sha256Func)
 		}
 		h_i_C <- h_i
+		c_i_C <- c_i
+		close(c_i_C)
 		close(h_i_C)
 	}()
 
 	// compute term in the right side
-	π_QvkiC := make(chan *pbc.Element, 1)
+	π_QvkiC_one := make(chan *pbc.Element, 1)
 	go func() {
 		π_Qvki := pp.pairing.NewGT().Set1()
 		c_i := <-c_i_C
-		h_i := <-h_i_C
 		for i := 0; i < len(ms); i++ {
-			ch := pp.pairing.NewZr().MulZn(c_i[i], h_i[i])
-			π_Qvki.ThenMul(pp.pairing.NewGT().Set1().PowZn(dvks[i].Qvk, pp.pairing.NewZr().Neg(ch)))
+			π_Qvki.ThenMul(pp.pairing.NewGT().Set1().PowZn(dvks[i].Qvk_one, pp.pairing.NewZr().Neg(c_i[i])))
 		}
-		π_QvkiC <- π_Qvki
-		close(π_QvkiC)
+		π_QvkiC_one <- π_Qvki
+		close(π_QvkiC_one)
 	}()
 
+	// compute term in the right side
+	π_Qvk_zero := pp.pairing.NewGT().Set1()
+	h_i := <-h_i_C
+	for i := 0; i < len(ms); i++ {
+		π_Qvk_zero.ThenMul(pp.pairing.NewGT().Set1().PowZn(dvks[i].Qvk_zero, pp.pairing.NewZr().Neg(h_i[i])))
+	}
+
+	gt := pp.pairing.NewGT().Set1()
+	rsh_three := gt.Pair(<-XnC, Pw)
+
 	rsh := pp.pairing.NewGT().Set1()
-	rsh.ThenMul(<-π_QvkiC).ThenMul(<-rshTermTwoC).ThenMul(<-π_XiC)
+	rsh.ThenMul(rsh_three)
+	rsh.ThenMul(π_Qvk_zero)
+
+	rsh.ThenMul(<-π_QvkiC_one)
 
 	return (<-lshC).Equals(rsh)
 }
