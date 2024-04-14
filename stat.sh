@@ -11,10 +11,13 @@ if [ ! -d "$directory" ]; then
 fi
 
 # level 1
-benchmarkFuncName[0]=BenchmarkSchemeL1SSign
-benchmarkFuncName[1]=BenchmarkSchemeL1SVerify
-benchmarkFuncName[2]=BenchmarkLevel1Aggregation
-benchmarkFuncName[3]=BenchmarkLevel1AggVerify
+benchmarkFuncName[0]=BenchmarkSchemeL1VerifyKeyDerive
+benchmarkFuncName[1]=BenchmarkSchemeL1VerifyKeyCheck
+benchmarkFuncName[2]=BenchmarkSchemeL1SignKeyDerive
+benchmarkFuncName[3]=BenchmarkSchemeL1SSign
+benchmarkFuncName[4]=BenchmarkSchemeL1SVerify
+benchmarkFuncName[5]=BenchmarkLevel1Aggregation
+benchmarkFuncName[6]=BenchmarkLevel1AggVerify
 
 
 echo ${#benchmarkFuncName[@]}
