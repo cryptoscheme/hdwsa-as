@@ -25,12 +25,13 @@ To download, run stathdwsa.sh in hdwsa, follow the following steps:
    
 # Introduction of Source Files
 
-   hdwsa-as.go: the implementation of all used functions in our hdwsa2 scheme.
+   hdwsa2.go: the implementation of all used functions in our hdwsa2 scheme.
    
    types.go: the data models.
    
-   hdwsa-as_test.go: the functioning test and benchmark logic here. 
+   hdwsa2_test.go: the functioning test and benchmark logic here. 
    
    run.sh: the scripts for running the test.
     
    stat.sh: extracting the result and final calculation.  
+
